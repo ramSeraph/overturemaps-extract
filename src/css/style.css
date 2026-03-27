@@ -612,13 +612,35 @@ input[type="range"]:disabled {
   border-top-color: #1e1e2e;
 }
 
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: #1e1e2e;
+}
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: #1e1e2e;
+}
+.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: #1e1e2e;
+}
+.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: #1e1e2e;
+}
+
 .maplibregl-popup-close-button {
   color: #999;
   font-size: 16px;
+  padding: 4px 8px;
+  right: 2px;
+  top: 2px;
 }
 
 .maplibregl-popup-close-button:hover {
   color: #fff;
+  background: #333;
+  border-radius: 4px;
 }
 
 .popup-coords {
