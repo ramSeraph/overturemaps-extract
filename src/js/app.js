@@ -172,10 +172,24 @@ function getLayerColor(layerName) {
 
 const OVERLAY_LAYER_IDS = [];
 let activeOverlaySource = null;
+let activeSourceLayer = null;
+let highlightedFeatureIds = [];
 let clickPopup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, maxWidth: '360px' });
+
+function clearHighlight() {
+  if (!activeOverlaySource || !map.getSource(activeOverlaySource)) return;
+  for (const fid of highlightedFeatureIds) {
+    map.setFeatureState(
+      { source: activeOverlaySource, sourceLayer: activeSourceLayer, id: fid },
+      { highlight: false }
+    );
+  }
+  highlightedFeatureIds = [];
+}
 
 function removeOverlayLayers() {
   clickPopup.remove();
+  clearHighlight();
   for (const id of OVERLAY_LAYER_IDS) {
     if (map.getLayer(id)) map.removeLayer(id);
   }
@@ -184,6 +198,7 @@ function removeOverlayLayers() {
     map.removeSource(activeOverlaySource);
   }
   activeOverlaySource = null;
+  activeSourceLayer = null;
 }
 
 function showOverlayLayer(layer) {
@@ -197,8 +212,10 @@ function showOverlayLayer(layer) {
   map.addSource(srcName, {
     type: 'vector',
     url: `pmtiles://${layer.pmtilesUrl}`,
+    promoteId: { [sourceLayer]: 'id' },
   });
   activeOverlaySource = srcName;
+  activeSourceLayer = sourceLayer;
 
   // Polygon fill
   const fillId = `${srcName}-fill`;
@@ -210,7 +227,12 @@ function showOverlayLayer(layer) {
     filter: ['==', '$type', 'Polygon'],
     paint: {
       'fill-color': color,
-      'fill-opacity': 0.12,
+      'fill-opacity': [
+        'case',
+        ['boolean', ['feature-state', 'highlight'], false],
+        0.3,
+        0.12,
+      ],
     },
   });
   OVERLAY_LAYER_IDS.push(fillId);
@@ -225,8 +247,18 @@ function showOverlayLayer(layer) {
     filter: ['==', '$type', 'Polygon'],
     paint: {
       'line-color': color,
-      'line-width': 1,
-      'line-opacity': 0.6,
+      'line-width': [
+        'case',
+        ['boolean', ['feature-state', 'highlight'], false],
+        2.5,
+        1,
+      ],
+      'line-opacity': [
+        'case',
+        ['boolean', ['feature-state', 'highlight'], false],
+        1,
+        0.6,
+      ],
     },
   });
   OVERLAY_LAYER_IDS.push(outlineId);
@@ -241,8 +273,18 @@ function showOverlayLayer(layer) {
     filter: ['==', '$type', 'LineString'],
     paint: {
       'line-color': color,
-      'line-width': 1.5,
-      'line-opacity': 0.7,
+      'line-width': [
+        'case',
+        ['boolean', ['feature-state', 'highlight'], false],
+        3,
+        1.5,
+      ],
+      'line-opacity': [
+        'case',
+        ['boolean', ['feature-state', 'highlight'], false],
+        1,
+        0.7,
+      ],
     },
   });
   OVERLAY_LAYER_IDS.push(lineId);
@@ -257,8 +299,18 @@ function showOverlayLayer(layer) {
     filter: ['==', '$type', 'Point'],
     paint: {
       'circle-color': color,
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.5, 14, 4],
-      'circle-opacity': 0.75,
+      'circle-radius': [
+        'case',
+        ['boolean', ['feature-state', 'highlight'], false],
+        ['interpolate', ['linear'], ['zoom'], 4, 3, 14, 6],
+        ['interpolate', ['linear'], ['zoom'], 4, 1.5, 14, 4],
+      ],
+      'circle-opacity': [
+        'case',
+        ['boolean', ['feature-state', 'highlight'], false],
+        1,
+        0.75,
+      ],
     },
   });
   OVERLAY_LAYER_IDS.push(ptId);
@@ -309,6 +361,16 @@ map.on('mousemove', (e) => {
   }
   const features = map.queryRenderedFeatures(e.point, { layers: OVERLAY_LAYER_IDS });
   map.getCanvas().style.cursor = features.length ? 'pointer' : '';
+
+  clearHighlight();
+  for (const ft of features) {
+    if (ft.id == null) continue;
+    map.setFeatureState(
+      { source: activeOverlaySource, sourceLayer: activeSourceLayer, id: ft.id },
+      { highlight: true }
+    );
+    highlightedFeatureIds.push(ft.id);
+  }
 });
 
 // --- Extractor (lazy-initialized on first download) ---
