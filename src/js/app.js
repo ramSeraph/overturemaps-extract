@@ -139,6 +139,147 @@ map.addControl(new maplibregl.NavigationControl({ showCompass: false }));
 let layerMap = {};
 let catalogReady = false;
 
+// --- PMTiles vector layer display ---
+
+const OVERLAY_COLOR = '#00d4ff';
+const OVERLAY_LAYER_IDS = [];
+let activeOverlaySource = null;
+let clickPopup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, maxWidth: '360px' });
+
+function removeOverlayLayers() {
+  clickPopup.remove();
+  for (const id of OVERLAY_LAYER_IDS) {
+    if (map.getLayer(id)) map.removeLayer(id);
+  }
+  OVERLAY_LAYER_IDS.length = 0;
+  if (activeOverlaySource && map.getSource(activeOverlaySource)) {
+    map.removeSource(activeOverlaySource);
+  }
+  activeOverlaySource = null;
+}
+
+function showOverlayLayer(layer) {
+  removeOverlayLayers();
+  if (!layer || !layer.pmtilesUrl) return;
+
+  const srcName = `overture-overlay`;
+  const sourceLayer = layer.name;
+
+  map.addSource(srcName, {
+    type: 'vector',
+    url: `pmtiles://${layer.pmtilesUrl}`,
+  });
+  activeOverlaySource = srcName;
+
+  // Polygon fill
+  const fillId = `${srcName}-fill`;
+  map.addLayer({
+    id: fillId,
+    type: 'fill',
+    source: srcName,
+    'source-layer': sourceLayer,
+    filter: ['==', '$type', 'Polygon'],
+    paint: {
+      'fill-color': OVERLAY_COLOR,
+      'fill-opacity': 0.12,
+    },
+  });
+  OVERLAY_LAYER_IDS.push(fillId);
+
+  // Polygon outline
+  const outlineId = `${srcName}-outline`;
+  map.addLayer({
+    id: outlineId,
+    type: 'line',
+    source: srcName,
+    'source-layer': sourceLayer,
+    filter: ['==', '$type', 'Polygon'],
+    paint: {
+      'line-color': OVERLAY_COLOR,
+      'line-width': 1,
+      'line-opacity': 0.6,
+    },
+  });
+  OVERLAY_LAYER_IDS.push(outlineId);
+
+  // Lines
+  const lineId = `${srcName}-line`;
+  map.addLayer({
+    id: lineId,
+    type: 'line',
+    source: srcName,
+    'source-layer': sourceLayer,
+    filter: ['==', '$type', 'LineString'],
+    paint: {
+      'line-color': OVERLAY_COLOR,
+      'line-width': 1.5,
+      'line-opacity': 0.7,
+    },
+  });
+  OVERLAY_LAYER_IDS.push(lineId);
+
+  // Points
+  const ptId = `${srcName}-pt`;
+  map.addLayer({
+    id: ptId,
+    type: 'circle',
+    source: srcName,
+    'source-layer': sourceLayer,
+    filter: ['==', '$type', 'Point'],
+    paint: {
+      'circle-color': OVERLAY_COLOR,
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.5, 14, 4],
+      'circle-opacity': 0.75,
+    },
+  });
+  OVERLAY_LAYER_IDS.push(ptId);
+}
+
+// --- Feature popup on click ---
+
+function escapeHtml(val) {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderPopupContent(features, lngLat) {
+  let html = `<div class="popup-coords">${lngLat.lng.toFixed(5)}, ${lngLat.lat.toFixed(5)}</div>`;
+  for (const ft of features) {
+    html += `<div class="popup-feature">`;
+    html += `<div class="popup-type">${escapeHtml(ft.geometry.type)}${ft.id != null ? ` · #${ft.id}` : ''}</div>`;
+    const props = ft.properties;
+    for (const key of Object.keys(props)) {
+      const val = props[key];
+      if (val === null || val === undefined) continue;
+      html += `<div class="popup-prop"><span class="popup-key">${escapeHtml(key)}</span> ${escapeHtml(val)}</div>`;
+    }
+    html += `</div>`;
+  }
+  return html;
+}
+
+map.on('click', (e) => {
+  if (!OVERLAY_LAYER_IDS.length) return;
+  const features = map.queryRenderedFeatures(e.point, { layers: OVERLAY_LAYER_IDS });
+  if (!features.length) {
+    clickPopup.remove();
+    return;
+  }
+  clickPopup
+    .setLngLat(e.lngLat)
+    .setHTML(renderPopupContent(features.slice(0, 5), e.lngLat))
+    .addTo(map);
+});
+
+map.on('mousemove', (e) => {
+  if (!OVERLAY_LAYER_IDS.length) {
+    map.getCanvas().style.cursor = '';
+    return;
+  }
+  const features = map.queryRenderedFeatures(e.point, { layers: OVERLAY_LAYER_IDS });
+  map.getCanvas().style.cursor = features.length ? 'pointer' : '';
+});
+
 // --- Extractor (lazy-initialized on first download) ---
 
 let extractor = null;
@@ -263,6 +404,7 @@ async function loadCatalog() {
     catalogReady = true;
 
     updateLayerInfo();
+    showOverlayLayer(layerMap[layerSelect.value]);
 
   } catch (error) {
     console.error('Failed to load STAC catalog:', error);
@@ -277,6 +419,7 @@ loadCatalog();
 layerSelect.addEventListener('change', () => {
   updateLayerInfo();
   setHashParam('layer', layerSelect.value);
+  showOverlayLayer(layerMap[layerSelect.value]);
   // Reset extents when layer changes
   if (extentLoading) cancelExtentFetch();
   removeAllExtents();
