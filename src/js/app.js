@@ -12,6 +12,7 @@ import {
 
 import { resolveStacCatalog } from './stac_resolver.js';
 import { OvertureSourceResolver } from './overture_metadata_provider.js';
+import { registerCorrectionProtocol } from '@india-boundary-corrector/maplibre-protocol';
 
 const DUCKDB_DIST = 'https://cdn.jsdelivr.net/npm/duckdb-wasm-opfs-tempdir@1.33.0/dist';
 
@@ -99,6 +100,7 @@ function setHashParam(key, value) {
 
 const pmtilesProtocol = new pmtiles.Protocol();
 maplibregl.addProtocol('pmtiles', pmtilesProtocol.tile);
+registerCorrectionProtocol(maplibregl);
 
 const map = new maplibregl.Map({
   container: 'map',
@@ -110,9 +112,9 @@ const map = new maplibregl.Map({
       'carto-dark': {
         type: 'raster',
         tiles: [
-          'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-          'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-          'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+          'ibc://https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+          'ibc://https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+          'ibc://https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
         ],
         tileSize: 256,
         maxzoom: 20,
