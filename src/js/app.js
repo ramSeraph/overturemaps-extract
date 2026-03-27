@@ -212,7 +212,6 @@ function showOverlayLayer(layer) {
   map.addSource(srcName, {
     type: 'vector',
     url: `pmtiles://${layer.pmtilesUrl}`,
-    promoteId: { [sourceLayer]: 'id' },
   });
   activeOverlaySource = srcName;
   activeSourceLayer = sourceLayer;
