@@ -381,6 +381,9 @@ function updateLayerInfo() {
   if (layer.totalFeatures) {
     html += ` · Records: <b>${layer.totalFeatures.toLocaleString()}</b>`;
   }
+  if (layer.minzoom != null && layer.maxzoom != null) {
+    html += ` · Zoom: <b>${layer.minzoom}–${layer.maxzoom}</b>`;
+  }
   if (layer.license) {
     const attrUrl = `https://docs.overturemaps.org/attribution/#${layer.theme}`;
     html += ` · License: <a href="${attrUrl}" target="_blank" rel="noopener" title="See full attribution details">${layer.license}</a>`;
@@ -436,6 +439,41 @@ async function loadCatalog() {
 
     updateLayerInfo();
     showOverlayLayer(layerMap[layerSelect.value]);
+
+    // Fetch PMTiles metadata in background to get zoom ranges per layer
+    const uniquePmtiles = [...new Set(themes.map(t => t.pmtilesUrl).filter(Boolean))];
+    const pmtilesCache = new Map();
+    Promise.all(uniquePmtiles.map(async (url) => {
+      try {
+        let p = pmtilesCache.get(url);
+        if (!p) {
+          p = new pmtiles.PMTiles(url);
+          pmtilesCache.set(url, p);
+        }
+        const meta = await p.getMetadata();
+        return { url, vectorLayers: meta.vector_layers || [] };
+      } catch (e) {
+        console.warn('Failed to fetch PMTiles metadata:', url, e);
+        return { url, vectorLayers: [] };
+      }
+    })).then((results) => {
+      const zoomByUrl = new Map();
+      for (const { url, vectorLayers } of results) {
+        const byName = new Map();
+        for (const vl of vectorLayers) {
+          byName.set(vl.id, { minzoom: vl.minzoom, maxzoom: vl.maxzoom });
+        }
+        zoomByUrl.set(url, byName);
+      }
+      for (const entry of Object.values(layerMap)) {
+        const layerZooms = zoomByUrl.get(entry.pmtilesUrl)?.get(entry.name);
+        if (layerZooms) {
+          entry.minzoom = layerZooms.minzoom;
+          entry.maxzoom = layerZooms.maxzoom;
+        }
+      }
+      updateLayerInfo();
+    });
 
   } catch (error) {
     console.error('Failed to load STAC catalog:', error);
