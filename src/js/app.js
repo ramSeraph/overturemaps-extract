@@ -141,7 +141,35 @@ let catalogReady = false;
 
 // --- PMTiles vector layer display ---
 
-const OVERLAY_COLOR = '#00d4ff';
+const LAYER_COLORS = {
+  // Addresses
+  address:             '#f59e0b',
+  // Base
+  bathymetry:          '#0ea5e9',
+  infrastructure:      '#a78bfa',
+  land:                '#22c55e',
+  land_cover:          '#16a34a',
+  land_use:            '#84cc16',
+  water:               '#38bdf8',
+  // Buildings
+  building:            '#f97316',
+  building_part:       '#fb923c',
+  // Divisions
+  division:            '#e879f9',
+  division_area:       '#c084fc',
+  division_boundary:   '#a855f7',
+  // Places
+  place:               '#f43f5e',
+  // Transportation
+  connector:           '#facc15',
+  segment:             '#eab308',
+};
+const DEFAULT_OVERLAY_COLOR = '#00d4ff';
+
+function getLayerColor(layerName) {
+  return LAYER_COLORS[layerName] || DEFAULT_OVERLAY_COLOR;
+}
+
 const OVERLAY_LAYER_IDS = [];
 let activeOverlaySource = null;
 let clickPopup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, maxWidth: '360px' });
@@ -164,6 +192,7 @@ function showOverlayLayer(layer) {
 
   const srcName = `overture-overlay`;
   const sourceLayer = layer.name;
+  const color = getLayerColor(layer.name);
 
   map.addSource(srcName, {
     type: 'vector',
@@ -180,7 +209,7 @@ function showOverlayLayer(layer) {
     'source-layer': sourceLayer,
     filter: ['==', '$type', 'Polygon'],
     paint: {
-      'fill-color': OVERLAY_COLOR,
+      'fill-color': color,
       'fill-opacity': 0.12,
     },
   });
@@ -195,7 +224,7 @@ function showOverlayLayer(layer) {
     'source-layer': sourceLayer,
     filter: ['==', '$type', 'Polygon'],
     paint: {
-      'line-color': OVERLAY_COLOR,
+      'line-color': color,
       'line-width': 1,
       'line-opacity': 0.6,
     },
@@ -211,7 +240,7 @@ function showOverlayLayer(layer) {
     'source-layer': sourceLayer,
     filter: ['==', '$type', 'LineString'],
     paint: {
-      'line-color': OVERLAY_COLOR,
+      'line-color': color,
       'line-width': 1.5,
       'line-opacity': 0.7,
     },
@@ -227,7 +256,7 @@ function showOverlayLayer(layer) {
     'source-layer': sourceLayer,
     filter: ['==', '$type', 'Point'],
     paint: {
-      'circle-color': OVERLAY_COLOR,
+      'circle-color': color,
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.5, 14, 4],
       'circle-opacity': 0.75,
     },
@@ -242,11 +271,11 @@ function escapeHtml(val) {
   return String(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function renderPopupContent(features, lngLat) {
+function renderPopupContent(features, lngLat, color) {
   let html = `<div class="popup-coords">${lngLat.lng.toFixed(5)}, ${lngLat.lat.toFixed(5)}</div>`;
   for (const ft of features) {
     html += `<div class="popup-feature">`;
-    html += `<div class="popup-type">${escapeHtml(ft.geometry.type)}${ft.id != null ? ` · #${ft.id}` : ''}</div>`;
+    html += `<div class="popup-type" style="color:${color}">${escapeHtml(ft.geometry.type)}${ft.id != null ? ` · #${ft.id}` : ''}</div>`;
     const props = ft.properties;
     for (const key of Object.keys(props)) {
       const val = props[key];
@@ -265,9 +294,11 @@ map.on('click', (e) => {
     clickPopup.remove();
     return;
   }
+  const layer = layerMap[layerSelect.value];
+  const color = layer ? getLayerColor(layer.name) : DEFAULT_OVERLAY_COLOR;
   clickPopup
     .setLngLat(e.lngLat)
-    .setHTML(renderPopupContent(features.slice(0, 5), e.lngLat))
+    .setHTML(renderPopupContent(features.slice(0, 5), e.lngLat, color))
     .addTo(map);
 });
 
