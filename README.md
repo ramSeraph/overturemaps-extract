@@ -21,7 +21,7 @@ Themes and layers are resolved dynamically from the catalog. As of the latest re
 | Theme | Layers |
 |-------|--------|
 | Addresses | address |
-| Base | infrastructure, land, land_cover, land_use, water |
+| Base | bathymetry, infrastructure, land, land_cover, land_use, water |
 | Buildings | building, building_part |
 | Divisions | division, division_area, division_boundary |
 | Places | place |

@@ -171,29 +171,31 @@ function getLayerColor(layerName) {
 }
 
 const OVERLAY_LAYER_IDS = [];
+const HIGHLIGHT_LAYER_IDS = [];
 let activeOverlaySource = null;
 let activeSourceLayer = null;
-let highlightedFeatureIds = [];
 let clickPopup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, maxWidth: '360px' });
 
+const HIGHLIGHT_SOURCE = 'overture-highlight';
+const emptyGeoJSON = { type: 'FeatureCollection', features: [] };
+
 function clearHighlight() {
-  if (!activeOverlaySource || !map.getSource(activeOverlaySource)) return;
-  for (const fid of highlightedFeatureIds) {
-    map.setFeatureState(
-      { source: activeOverlaySource, sourceLayer: activeSourceLayer, id: fid },
-      { highlight: false }
-    );
+  if (map.getSource(HIGHLIGHT_SOURCE)) {
+    map.getSource(HIGHLIGHT_SOURCE).setData(emptyGeoJSON);
   }
-  highlightedFeatureIds = [];
 }
 
 function removeOverlayLayers() {
   clickPopup.remove();
-  clearHighlight();
+  for (const id of HIGHLIGHT_LAYER_IDS) {
+    if (map.getLayer(id)) map.removeLayer(id);
+  }
+  HIGHLIGHT_LAYER_IDS.length = 0;
   for (const id of OVERLAY_LAYER_IDS) {
     if (map.getLayer(id)) map.removeLayer(id);
   }
   OVERLAY_LAYER_IDS.length = 0;
+  if (map.getSource(HIGHLIGHT_SOURCE)) map.removeSource(HIGHLIGHT_SOURCE);
   if (activeOverlaySource && map.getSource(activeOverlaySource)) {
     map.removeSource(activeOverlaySource);
   }
@@ -224,15 +226,7 @@ function showOverlayLayer(layer) {
     source: srcName,
     'source-layer': sourceLayer,
     filter: ['==', '$type', 'Polygon'],
-    paint: {
-      'fill-color': color,
-      'fill-opacity': [
-        'case',
-        ['boolean', ['feature-state', 'highlight'], false],
-        0.3,
-        0.12,
-      ],
-    },
+    paint: { 'fill-color': color, 'fill-opacity': 0.12 },
   });
   OVERLAY_LAYER_IDS.push(fillId);
 
@@ -244,21 +238,7 @@ function showOverlayLayer(layer) {
     source: srcName,
     'source-layer': sourceLayer,
     filter: ['==', '$type', 'Polygon'],
-    paint: {
-      'line-color': color,
-      'line-width': [
-        'case',
-        ['boolean', ['feature-state', 'highlight'], false],
-        2.5,
-        1,
-      ],
-      'line-opacity': [
-        'case',
-        ['boolean', ['feature-state', 'highlight'], false],
-        1,
-        0.6,
-      ],
-    },
+    paint: { 'line-color': color, 'line-width': 1, 'line-opacity': 0.6 },
   });
   OVERLAY_LAYER_IDS.push(outlineId);
 
@@ -270,21 +250,7 @@ function showOverlayLayer(layer) {
     source: srcName,
     'source-layer': sourceLayer,
     filter: ['==', '$type', 'LineString'],
-    paint: {
-      'line-color': color,
-      'line-width': [
-        'case',
-        ['boolean', ['feature-state', 'highlight'], false],
-        3,
-        1.5,
-      ],
-      'line-opacity': [
-        'case',
-        ['boolean', ['feature-state', 'highlight'], false],
-        1,
-        0.7,
-      ],
-    },
+    paint: { 'line-color': color, 'line-width': 1.5, 'line-opacity': 0.7 },
   });
   OVERLAY_LAYER_IDS.push(lineId);
 
@@ -298,21 +264,49 @@ function showOverlayLayer(layer) {
     filter: ['==', '$type', 'Point'],
     paint: {
       'circle-color': color,
-      'circle-radius': [
-        'case',
-        ['boolean', ['feature-state', 'highlight'], false],
-        ['interpolate', ['linear'], ['zoom'], 4, 3, 14, 6],
-        ['interpolate', ['linear'], ['zoom'], 4, 1.5, 14, 4],
-      ],
-      'circle-opacity': [
-        'case',
-        ['boolean', ['feature-state', 'highlight'], false],
-        1,
-        0.75,
-      ],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.5, 14, 4],
+      'circle-opacity': 0.75,
     },
   });
   OVERLAY_LAYER_IDS.push(ptId);
+
+  // --- Highlight layers (GeoJSON overlay for hovered features) ---
+  map.addSource(HIGHLIGHT_SOURCE, { type: 'geojson', data: emptyGeoJSON });
+
+  const hlFill = `${HIGHLIGHT_SOURCE}-fill`;
+  map.addLayer({
+    id: hlFill,
+    type: 'fill',
+    source: HIGHLIGHT_SOURCE,
+    filter: ['==', '$type', 'Polygon'],
+    paint: { 'fill-color': color, 'fill-opacity': 0.35 },
+  });
+  HIGHLIGHT_LAYER_IDS.push(hlFill);
+
+  const hlLine = `${HIGHLIGHT_SOURCE}-line`;
+  map.addLayer({
+    id: hlLine,
+    type: 'line',
+    source: HIGHLIGHT_SOURCE,
+    paint: { 'line-color': color, 'line-width': 2.5, 'line-opacity': 1 },
+  });
+  HIGHLIGHT_LAYER_IDS.push(hlLine);
+
+  const hlPt = `${HIGHLIGHT_SOURCE}-pt`;
+  map.addLayer({
+    id: hlPt,
+    type: 'circle',
+    source: HIGHLIGHT_SOURCE,
+    filter: ['==', '$type', 'Point'],
+    paint: {
+      'circle-color': color,
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 3, 14, 6],
+      'circle-opacity': 1,
+      'circle-stroke-color': '#fff',
+      'circle-stroke-width': 1,
+    },
+  });
+  HIGHLIGHT_LAYER_IDS.push(hlPt);
 }
 
 // --- Feature popup on click ---
@@ -361,14 +355,13 @@ map.on('mousemove', (e) => {
   const features = map.queryRenderedFeatures(e.point, { layers: OVERLAY_LAYER_IDS });
   map.getCanvas().style.cursor = features.length ? 'pointer' : '';
 
-  clearHighlight();
-  for (const ft of features) {
-    if (ft.id == null) continue;
-    map.setFeatureState(
-      { source: activeOverlaySource, sourceLayer: activeSourceLayer, id: ft.id },
-      { highlight: true }
-    );
-    highlightedFeatureIds.push(ft.id);
+  if (features.length && map.getSource(HIGHLIGHT_SOURCE)) {
+    map.getSource(HIGHLIGHT_SOURCE).setData({
+      type: 'FeatureCollection',
+      features: features.map(ft => ({ type: 'Feature', geometry: ft.geometry, properties: {} })),
+    });
+  } else {
+    clearHighlight();
   }
 });
 
