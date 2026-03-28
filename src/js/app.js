@@ -96,6 +96,13 @@ function setHashParam(key, value) {
   window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${newHash}`);
 }
 
+function deleteHashParam(key) {
+  const params = getHashParams();
+  params.delete(key);
+  const newHash = '#' + params.toString().replaceAll('%2F', '/');
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${newHash}`);
+}
+
 // --- Map initialization (Carto Dark Matter) ---
 
 const pmtilesProtocol = new pmtiles.Protocol();
@@ -494,6 +501,12 @@ async function loadCatalog() {
     updateLayerInfo();
     showOverlayLayer(layerMap[layerSelect.value]);
 
+    // Restore extents checkbox from URL hash
+    if (getHashParams().get('extents') === '1') {
+      extentsCheckbox.checked = true;
+      showExtents();
+    }
+
     // Fetch PMTiles metadata in background to get zoom ranges per layer
     const uniquePmtiles = [...new Set(themes.map(t => t.pmtilesUrl).filter(Boolean))];
     const pmtilesCache = new Map();
@@ -548,6 +561,7 @@ layerSelect.addEventListener('change', () => {
   removeAllExtents();
   extentsCheckbox.checked = false;
   extentsStatus.textContent = '';
+  deleteHashParam('extents');
 });
 
 // --- Download ---
@@ -916,8 +930,10 @@ async function showExtents() {
 
 extentsCheckbox.addEventListener('change', async () => {
   if (extentsCheckbox.checked) {
+    setHashParam('extents', '1');
     await showExtents();
   } else {
+    deleteHashParam('extents');
     if (extentLoading) cancelExtentFetch();
     removeAllExtents();
     extentsStatus.textContent = '';
